@@ -28,9 +28,21 @@ class QJoinSQLTestCase(SimpleTestCase):
         join = QJoin(person=expression)
         query = PersonAddress.objects.filter(join)
         self.assertQueryEqual(query, '''
+            SELECT "tests_personaddress"."id", "tests_personaddress"."person_id",
+            "tests_personaddress"."address_id", "tests_personaddress"."primary" FROM
+            "tests_personaddress" INNER JOIN "tests_person" ON (
+                "tests_personaddress"."person_id" = "tests_person"."id" )
+        ''')
+
+    def test_simple_louter_join(self):
+        """Build basic left outer join."""
+        expression = JoinExpression(Person, outer=True)
+        join = QJoin(person=expression)
+        query = PersonAddress.objects.filter(join)
+        self.assertQueryEqual(query, '''
             SELECT "tests_personaddress"."id", "tests_personaddress"."person_id", 
             "tests_personaddress"."address_id", "tests_personaddress"."primary" FROM 
-            "tests_personaddress" INNER JOIN "tests_person" ON ( 
+            "tests_personaddress" LEFT OUTER JOIN "tests_person" ON (
                 "tests_personaddress"."person_id" = "tests_person"."id" )
         ''')
 
@@ -45,30 +57,81 @@ class QJoinSQLTestCase(SimpleTestCase):
             "tests_personaddress" INNER JOIN "tests_person" ON ( 
                 "tests_personaddress"."person_id" = "tests_person"."id" AND ("tests_person"."age" > 10 ))
         ''')
- 
+
+    def test_filtered_outer_join(self):
+        """Build outer join with filter."""
+        expression = JoinExpression(Person.objects.filter(age__gt=10), outer=True)
+        join = QJoin(person=expression)
+        query = PersonAddress.objects.filter(join)
+        self.assertQueryEqual(query, '''
+            SELECT "tests_personaddress"."id", "tests_personaddress"."person_id",
+            "tests_personaddress"."address_id", "tests_personaddress"."primary" FROM
+            "tests_personaddress" LEFT OUTER JOIN "tests_person" ON (
+                "tests_personaddress"."person_id" = "tests_person"."id" AND ("tests_person"."age" > 10 ))
+        ''')
+
     def test_complex_qs_join(self):
         """Build a join on a queryset with other filters."""
         expression = JoinExpression(Person)
         join = QJoin(person=expression)
         query = PersonAddress.objects.filter(join, primary=True)
         self.assertQueryEqual(query, '''
+            SELECT "tests_personaddress"."id", "tests_personaddress"."person_id",
+            "tests_personaddress"."address_id", "tests_personaddress"."primary" FROM
+            "tests_personaddress" INNER JOIN "tests_person" ON (
+                "tests_personaddress"."person_id" = "tests_person"."id" )
+            WHERE "tests_personaddress"."primary" = True
+        ''')
+
+    def test_complex_qs_outer_join(self):
+        """Build an outer join on a queryset with other filters."""
+        expression = JoinExpression(Person, outer=True)
+        join = QJoin(person=expression)
+        query = PersonAddress.objects.filter(join, primary=True)
+        self.assertQueryEqual(query, '''
             SELECT "tests_personaddress"."id", "tests_personaddress"."person_id", 
             "tests_personaddress"."address_id", "tests_personaddress"."primary" FROM 
-            "tests_personaddress" INNER JOIN "tests_person" ON ( 
+            "tests_personaddress" LEFT OUTER JOIN "tests_person" ON (
                 "tests_personaddress"."person_id" = "tests_person"."id" ) 
             WHERE "tests_personaddress"."primary" = True 
         ''')
 
-    def test_multiple_joins(self):
-        """Create multiple joins."""
+    def test_multiple_inner_joins(self):
+        """Create multiple inner joins."""
         join = QJoin(person=JoinExpression(Person), address=JoinExpression(Address))
+        query = PersonAddress.objects.filter(join)
+        self.assertQueryEqual(query, '''
+            SELECT "tests_personaddress"."id", "tests_personaddress"."person_id",
+            "tests_personaddress"."address_id", "tests_personaddress"."primary" FROM
+            "tests_personaddress" INNER JOIN "tests_person" ON (
+                "tests_personaddress"."person_id" = "tests_person"."id" )
+            INNER JOIN "tests_address" ON (
+                "tests_personaddress"."address_id" = "tests_address"."id" )
+        ''')
+
+    def test_multiple_outer_joins(self):
+        """Create multiple outer joins."""
+        join = QJoin(person=JoinExpression(Person, outer=True), address=JoinExpression(Address, outer=True))
         query = PersonAddress.objects.filter(join)
         self.assertQueryEqual(query, '''
             SELECT "tests_personaddress"."id", "tests_personaddress"."person_id", 
             "tests_personaddress"."address_id", "tests_personaddress"."primary" FROM 
-            "tests_personaddress" INNER JOIN "tests_person" ON ( 
+            "tests_personaddress" LEFT OUTER JOIN "tests_person" ON (
                 "tests_personaddress"."person_id" = "tests_person"."id" ) 
-            INNER JOIN "tests_address" ON ( 
+            LEFT OUTER JOIN "tests_address" ON (
+                "tests_personaddress"."address_id" = "tests_address"."id" )
+        ''')
+
+    def test_multiple_mixed_joins(self):
+        """Create multiple joins using outer and inner joins."""
+        join = QJoin(person=JoinExpression(Person, outer=True), address=JoinExpression(Address, outer=False))
+        query = PersonAddress.objects.filter(join)
+        self.assertQueryEqual(query, '''
+            SELECT "tests_personaddress"."id", "tests_personaddress"."person_id",
+            "tests_personaddress"."address_id", "tests_personaddress"."primary" FROM
+            "tests_personaddress" LEFT OUTER JOIN "tests_person" ON (
+                "tests_personaddress"."person_id" = "tests_person"."id" )
+            INNER JOIN "tests_address" ON (
                 "tests_personaddress"."address_id" = "tests_address"."id" )
         ''')
 

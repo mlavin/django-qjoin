@@ -31,10 +31,11 @@ class QueryFieldRestriction(object):
 class JoinExpression(ExpressionNode):
     """Builds a join expression to be fed into a QJoin."""
 
-    def __init__(self, qs_or_model, rhs_column='id'):
+    def __init__(self, qs_or_model, rhs_column='id', outer=False):
         super(JoinExpression, self).__init__(None, None, False)
         self.rhs_column = rhs_column
         self.name = None
+        self.outer = outer
         if isinstance(qs_or_model, QuerySet):
             self.rhs_query = qs_or_model.query
             self.rhs_model = self.rhs_query.model
@@ -63,7 +64,7 @@ class JoinExpression(ExpressionNode):
             ((lhs_column, rhs_column), )
         )
         query.get_initial_alias()
-        query.join(connection, join_field=QueryFieldRestriction(self.rhs_query))
+        query.join(connection, outer_if_first=self.outer, join_field=QueryFieldRestriction(self.rhs_query))
         return evaluator.prepare_leaf(self, query, allow_joins)
         
     def evaluate(self, evaluator, qn, connection):
