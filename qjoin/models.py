@@ -1,15 +1,13 @@
 from copy import deepcopy
 
 from django.db.models import Q
-from django.db.models.query import QuerySet
 from django.db.models.expressions import ExpressionNode
+from django.db.models.fields.related import RelatedField
+from django.db.models.query import QuerySet
 
 
 class NoOpCompiler(object):
     """No-op subquery SQL compiler."""
-
-    def as_sql(self, *args, **kwargs):
-        return '', []
 
     def as_subquery_condition(self, *args, **kwargs):
         return '', []
@@ -43,6 +41,11 @@ class JoinExpression(ExpressionNode):
             self.rhs_query = None
             self.rhs_model = qs_or_model
 
+    def __repr__(self):
+        return '<JoinExpression: %s %s %s.%s>' % (self.name,
+            'OUTER' if self.outer else 'INNER', self.rhs_model._meta.db_table,
+            self.rhs_column)
+
     def contains_aggregate(self, existing_aggregates):
         return False
 
@@ -54,7 +57,6 @@ class JoinExpression(ExpressionNode):
         raise ValueError('Invalid field "%s" for %s' % (name, model.__name__))
 
     def prepare(self, evaluator, query, allow_joins):
-        evaluator.get_compiler = self.get_compiler
         lhs_model = query.model
         lhs_column = self._get_column(lhs_model, self.name)
         rhs_column = self._get_column(self.rhs_model, self.rhs_column)
@@ -65,8 +67,20 @@ class JoinExpression(ExpressionNode):
         )
         query.get_initial_alias()
         query.join(connection, outer_if_first=self.outer, join_field=QueryFieldRestriction(self.rhs_query))
+
+        if isinstance(query.get_meta().get_field(self.name), RelatedField):
+            evaluator.get_compiler = self.get_compiler
+        else:
+            # When dealing with a non-fk, it's necessary to have the evaluator
+            # return the table.column because the ORM adds "table.column = " to
+            # the where clause. This essentially results in a no-op and will be
+            # removed by any database's query optimizer.
+            def as_sql(qn, connection):
+                return '%s.%s' % (qn(lhs_model._meta.db_table), qn(lhs_column)), []
+            evaluator.as_sql = as_sql
+
         return evaluator.prepare_leaf(self, query, allow_joins)
-        
+
     def evaluate(self, evaluator, qn, connection):
         return evaluator.evaluate_leaf(self, qn, connection)
 

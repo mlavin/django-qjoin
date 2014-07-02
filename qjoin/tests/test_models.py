@@ -4,7 +4,7 @@ import re
 
 from django.test import TestCase, SimpleTestCase
  
-from .models import Person, Address, PersonAddress, Email
+from .models import Person, Address, PersonAddress, Email, Bounce
 from ..models import QJoin, JoinExpression
  
  
@@ -135,6 +135,31 @@ class QJoinSQLTestCase(SimpleTestCase):
                 "tests_personaddress"."address_id" = "tests_address"."id" )
         ''')
 
+    def test_non_fk_inner_join(self):
+        """Create an inner join between non-FK fields."""
+        join = QJoin(email=JoinExpression(Email.objects.filter(primary=True, email='a'), 'email'))
+        query = Bounce.objects.filter(bounced__gt='2014-01-01').filter(join)
+        self.assertQueryEqual(query, '''
+            SELECT "tests_bounce"."id", "tests_bounce"."email",
+            "tests_bounce"."bounced" FROM "tests_bounce" INNER JOIN
+            "tests_email" ON ( "tests_bounce"."email" = "tests_email"."email"
+                AND (("tests_email"."primary" = True AND "tests_email"."email" = a )))
+            WHERE ("tests_bounce"."bounced" > 2014-01-01 00:00:00 AND
+                "tests_bounce"."email" = "tests_bounce"."email")
+        ''')
+
+    def test_non_fk_outer_join(self):
+        """Create an inner join between non-FK fields."""
+        join = QJoin(email=JoinExpression(Email.objects.filter(primary=True, email='a'), 'email', outer=True))
+        query = Bounce.objects.filter(bounced__gt='2014-01-01').filter(join)
+        self.assertQueryEqual(query, '''
+            SELECT "tests_bounce"."id", "tests_bounce"."email",
+            "tests_bounce"."bounced" FROM "tests_bounce" LEFT OUTER JOIN
+            "tests_email" ON ( "tests_bounce"."email" = "tests_email"."email"
+                AND (("tests_email"."primary" = True AND "tests_email"."email" = a )))
+            WHERE ("tests_bounce"."bounced" > 2014-01-01 00:00:00 AND
+                "tests_bounce"."email" = "tests_bounce"."email")
+        ''')
 
 class QJoinTestCase(TestCase):
     """Use QJoin for various queries."""
