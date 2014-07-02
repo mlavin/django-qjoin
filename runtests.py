@@ -15,8 +15,6 @@ if not settings.configured:
         },
         MIDDLEWARE_CLASSES=(),
         INSTALLED_APPS=(
-            'django.contrib.auth',
-            'django.contrib.contenttypes',
             'qjoin.tests',
             'qjoin',
         ),
