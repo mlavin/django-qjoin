@@ -3,8 +3,9 @@ django-qjoin
 
 Welcome to the documentation for django-qjoin!
 
-Django-qjoin is a package that provides a way of adding arbitrary joins to a
-query using expressions.
+Django-qjoin is an experimental package that provides a way of
+adding arbitrary joins to a query using expressions. This is very much
+a work in progress and isn't currently working on the latest Django versions.
 
 Examples
 ------------------------------------
